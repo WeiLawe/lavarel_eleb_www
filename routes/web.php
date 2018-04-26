@@ -14,3 +14,11 @@
 Route::get('/', function () {
     return view('welcome');
 });
+
+//商铺列表
+Route::get('/shops','ApiController@shops');
+
+//指定店铺列表
+Route::get('/shop','ApiController@shop');
+
+//
