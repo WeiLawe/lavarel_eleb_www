@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Address;
+use App\Cart;
 use App\Sms;
 use App\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Redis;
 use Illuminate\Support\Facades\Validator;
 
@@ -64,13 +67,13 @@ class ApiController extends Controller
 //            dd($food_cat);
             $shop['commodity']=$food_cats;
         }
+
+
         return $shop;
 
     }
 
-    /**
-     * 发送短信
-     */
+    //发送短信
     public function sendSms(Request $request)
     {
         $params = array();
@@ -100,7 +103,7 @@ class ApiController extends Controller
 //            "product" => "阿里通信"
         );
 
-        Redis::setex('code',3600*24*7,$code);
+
         // fixme 可选: 设置发送短信流水号
 //        $params['OutId'] = "12345";
 
@@ -132,16 +135,19 @@ class ApiController extends Controller
 //        dd($content) ;
         if ($content->Message == 'OK'){
             //发送成功
-            echo '{
-              "status": "true",
-              "message": "获取验证码成功"
-                 }';
+            Redis::setex('code_'.$request->tel,30000,$code);
+//            echo '{
+//              "status": "true",
+//              "message": "获取验证码成功"
+//                 }';
+            return ['status'=>'true','message'=>'获取验证码成功'];
         }else{
             //发送失败
-            echo '{
-              "status": "false",
-              "message": "获取验证码失败,请检查电话号码稍后再试!"
-                }';
+//            echo '{
+//              "status": "false",
+//              "message": "获取验证码失败,请检查电话号码稍后再试!"
+//                }';
+            return ['status'=>'false','message'=>'获取验证码失败,请检查电话号码稍后再试!'];
         }
     }
 
@@ -164,6 +170,7 @@ class ApiController extends Controller
                 'tel.unique'=>'该手机号码已存在!',
                 'password.required'=>'密码不能为空!',
                 'sms.required'=>'验证码不能为空!',
+                'tel.regex'=>'电话号码不合法!'
             ]);
         //验证失败
         if ($validator->fails()){
@@ -174,7 +181,7 @@ class ApiController extends Controller
         }
 
 //        //验证 验证码
-        $code=Redis::get('code');
+        $code=Redis::get('code_'.$request->tel);
 //        return $code;
 
         if ($code!=$request->sms){
@@ -205,4 +212,200 @@ class ApiController extends Controller
         }
 
     }
+
+    //修改密码
+    public function changePassword(Request $request)
+       {
+//           return $request->input();
+           //旧密码输入正确
+           if (Hash::check($request->oldPassword,Auth::user()->password)){
+               DB::table('users')->where('id',Auth::user()->id)->update(
+                   [
+                       'password' => bcrypt($request->newPassword),
+                   ]
+               );
+               return ['status'=>'true','message'=>'修改密码成功!!'];
+           }
+           return ['status'=>'false','message'=>'旧密码错误!!'];
+       }
+
+    //忘记密码
+    public function forgetPassword(Request $request){
+
+            //查询电话号码
+            $res=DB::table('users')->where('tel',$request->tel)->first();
+//            dd($res);
+            if (!$res){
+                return ['status'=>'false','message'=>'该电话号码的用户不存在'];
+            }
+            //验证
+            $validator=Validator::make($request->all(),
+                [
+                    'tel'=>['regex:/^1(3|4|5|7|8)\d{9}$/','required',],
+                    'password'=>'required',
+                    'sms'=>'required',
+                ],
+                [
+                    'tel.required'=>'手机号码不能为空!',
+                    'password.required'=>'密码不能为空!',
+                    'sms.required'=>'验证码不能为空!',
+                    'tel.regex'=>'电话号码不合法!',
+                ]);
+            //验证失败
+            if ($validator->fails()){
+                //失败获取错误信息
+                $errors=$validator->errors();
+                //返回错误信息
+                return ['status'=>'false','message'=>$errors->first()];
+            }
+            //验证 验证码
+            $code=Redis::get('code_'.$request->tel);
+            //验证失败
+            if($code!=$request->sms){
+                return ['status'=>'false','message'=>'验证码填写错误!'];
+            }
+            //验证成功  进行修改
+            DB::table('users')->where('tel',$request->tel)->update(
+                [
+                    'password'=>bcrypt($request->password),
+                ]
+            );
+            //修改成功
+            return ['status'=>'true','message'=>'修改密码成功!!!'];
+        }
+
+    //地址列表
+    public function addressList()
+    {
+//        if (Auth::user()){
+            $addresses=DB::table('addresses')->get();
+            return $addresses;
+//        } else{
+//            return ['status'=>'false','message'=>'未登录,请先登录!'];
+//        }
+    }
+
+    //添加地址
+    public function addAddress(Request $request)
+    {
+//        return $request->input();
+        //验证
+        $validator=Validator::make($request->all(),
+            [
+                'tel'=>['regex:/^1(3|4|5|7|8)\d{9}$/','required'],
+            ],
+            [
+                'tel.required'=>'手机号码不能为空!',
+                'tel.regex'=>'电话号码不合法!'
+            ]);
+        //验证失败
+        if ($validator->fails()){
+            //失败获取错误信息
+            $errors=$validator->errors();
+            //返回错误信息
+            return ['status'=>'false','message'=>$errors->first()];
+        }
+
+        Address::create(
+            [
+                'name'=>$request->name,
+                'provence'=>$request->provence,
+                'city'=>$request->city,
+                'area'=>$request->area,
+                'detail_address'=>$request->detail_address,
+                'tel'=>$request->tel,
+                'user_id'=>Auth::user()->id,
+            ]
+        );
+        //添加成功
+        return ['status'=>'true','message'=>'添加地址成功!!!'];
+    }
+
+    //指定地址
+    public function address(Request $request)
+    {
+        $id=$request->id;
+        $address=DB::table('addresses')->where('id',$id)->first();
+        return json_encode($address);
+    }
+    
+    //修改地址
+    public function editAddress(Request $request)
+    {
+//        return $request->input();
+        //验证
+        $validator=Validator::make($request->all(),
+            [
+                'tel'=>['regex:/^1(3|4|5|7|8)\d{9}$/','required'],
+            ],
+            [
+                'tel.required'=>'手机号码不能为空!',
+                'tel.regex'=>'电话号码不合法!'
+            ]);
+
+        //验证失败
+        if ($validator->fails()){
+            //失败获取错误信息
+            $errors=$validator->errors();
+            //返回错误信息
+            return ['status'=>'false','message'=>$errors->first()];
+        }
+
+        DB::table('addresses')->where('id',$request->id)->update(
+            [
+                'name'=>$request->name,
+                'provence'=>$request->provence,
+                'city'=>$request->city,
+                'area'=>$request->area,
+                'detail_address'=>$request->detail_address,
+                'tel'=>$request->tel,
+            ]
+        );
+
+        //修改成功
+        return ['status'=>'true','message'=>'修改地址成功!!!'];
+    }
+
+    //添加到购物车
+    public function addCart(Request $request)
+    {
+//        return $request->input();
+        $goodList=$request->input()['goodsList'];
+        $goodCount=$request->input()['goodsCount'];
+        //在添加到数据表之前把之前的数据删除,增加用户体验
+        Cart::where('user_id',Auth::user()->id)->delete();
+        $key=0;
+        foreach($goodList as $good){
+            Cart::create(
+                [
+                    'user_id'=>Auth::user()->id,
+                    'goods_id'=>$good,
+                    'count'=>$goodCount[$key],
+                ]
+            );
+            ++$key;
+    }
+        return ['status'=>'true','message'=>'添加购物车成功!'];
+    }
+
+    //购物车查询
+    public function cart()
+    {
+        $carts=Cart::where('user_id',Auth::user()->id)->get();
+        $info=[];
+//        dd($carts);
+        $info['totalCost']=0;
+        foreach ($carts as $cart){
+            $meal=DB::table('meals')->where('id',$cart->goods_id)->first();
+            $meal->goods_id=$meal->id;
+            $meal->goods_name=$meal->meal_name;
+            $meal->goods_img=$meal->meal_img;
+            $meal->amount=$cart->count;
+            $meal->goods_price=$meal->meal_price;
+            $info['goods_list'][]=$meal;
+            $info['totalCost'] += $meal->meal_price*$meal->amount;
+        }
+            return $info;
+    }
+    
 }
