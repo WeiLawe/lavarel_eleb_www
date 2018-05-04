@@ -202,13 +202,13 @@ class ApiController extends Controller
     public function loginCheck(Request $request){
 //        return $request->input();
         //验证登陆
-        if (Auth::attempt(['name'=>$request->name,'password'=>$request->password])){
+        if (Auth::attempt(['name'=>$request->name,'password'=>$request->password,'status'=>0])){
             //登陆成功
             return ['status'=>'true','message'=>'登陆成功','user_id'=>Auth::user()->id,'username'=>Auth::user()->name];
         }
         //登录失败
         else{
-            return ['status'=>'false','message'=>'登录失败'];
+            return ['status'=>'false','message'=>'密码错误或者已被禁用,登录失败'];
         }
 
     }

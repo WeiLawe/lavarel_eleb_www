@@ -59,3 +59,8 @@ Route::get('/cart','ApiController@cart');
 //添加订单接口
 Route::post('/addorder','OrderController@addorder');
 
+//获得指定订单接口
+Route::get('/order','OrderController@order');
+
+//获得订单列表接口
+Route::get('/orderList','OrderController@orderList');
