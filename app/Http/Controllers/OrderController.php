@@ -3,6 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Address;
+use App\Email;
+use App\Order_sms;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -75,8 +77,17 @@ class OrderController extends Controller
             }
         });
 
+        //发送短信
+//        dd([$shopinfo->shop_name,$address->tel,$order_code]);
+
+        $name=$shopinfo->shop_name;
+        $tel=$address->tel;
+        $shop=DB::table('members')->where('shop_id',$shopinfo->id)->first();
+        $email=$shop->email;
         //获取订单id
         $order_id=DB::table('orders')->where('order_code',$order_code)->first();
+        Order_sms::sendSms($name,$tel,$order_code);
+        Email::email($email,$name);
         return [
             'status'=>'true',
             'message'=>'添加订单成功',
