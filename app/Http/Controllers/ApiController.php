@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Address;
 use App\Cart;
 use App\Sms;
+use App\SphinxClient;
 use App\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
@@ -16,10 +17,30 @@ use Illuminate\Support\Facades\Validator;
 class ApiController extends Controller
 {
     //商铺列表
-    public function shops()
+    public function shops(Request $request)
     {
+//        dd($request->keyword);
+        $cl = new SphinxClient();
+        $cl->SetServer ( '127.0.0.1', 9312);
+//$cl->SetServer ( '10.6.0.6', 9312);
+//$cl->SetServer ( '10.6.0.22', 9312);
+//$cl->SetServer ( '10.8.8.2', 9312);
+        $cl->SetConnectTimeout ( 10 );
+        $cl->SetArrayResult ( true );
+// $cl->SetMatchMode ( SPH_MATCH_ANY);
+        $cl->SetMatchMode ( SPH_MATCH_EXTENDED2);
+        $cl->SetLimits(0, 1000);
+        $info = $request->keyword;
+        $res = $cl->Query($info, 'shops');//shopstore_search
+//        dd($res);
+        if ($res['total']){
+            //获取店铺id的数据
+            $ids=collect($res['matches'])->pluck('id')->toArray();
+//            dd($ids);
+            $shops=DB::table('shops')->whereIn('shops.id',$ids)->get();
+            return $shops;
+        }
         $shops=DB::table('shops')->get();
-//        dd($shops);
         return $shops;
     }
 
